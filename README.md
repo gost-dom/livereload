@@ -10,12 +10,31 @@ Including those using hypermedia frameworks like HTMX or Datastar.
 This is not a good fit for SPAs. Those front-end frameworks typically have
 better solutions in their ecosystems with hot-module reloading.
 
+## Low-dependency 
+
+I always try to keep dependencies to a minimum. E.g., the library has its own
+websocket implementation. It's not a full implementation, only enough for this
+problem (e.g., this cannot handle messages larger than a single frame can hold)
+
+The only dependency is [fsnotify] used for monitoring file system events.
+
+I may refactor this in a way that the watcher gets moved to its own package, and
+the watcher to use is plugged into the main `Livereload` type. This would allow
+the core middleware to be a zero-dependency module, and client code can bring
+their own trigger logic.
+
+[fsnotify]: github.com/fsnotify/fsnotify
+
 ## How does this differentiate from other solutions.
 
-Other solutions I've tried includes Templ's own livereload capabilities, as well
-as Air. They both require an extra "proxy server", a dedicated process. They weren't stable
-. And air is simply too complicated to configure. This
-is a simple problem, the default configuration shouldn't be complex.
+The one tool ubiquitously mentioned to solve this problem in Go is [Air]. I find
+this to be an overly complex solution, it's difficult and unintuitive to
+configure, e.g., often the server was recompiled when unnecessary; often it
+wasn't recompiled when it was necessary.
+
+IMHO, this build on much simpler 
+
+[Air]: https://github.com/air-verse/air
 
 ## How this works
 
@@ -36,14 +55,63 @@ can be established again, it reloads. The _reconnect_ phase prevents reloading
 too soon, before the web server is ready to accept incoming connections,
 resulting in a "connection failed" state in the browser.
 
+## Avoiding dev-code in production builds.
+
+If your project follows the [Server Project] module layout, you could
+potentially create multiple `package main`, one for production, one for dev.
+
+If you decouple _application logic_ (including HTTP handlers) from _startup
+code_, then `package main` can be a very thin package only for launcing the HTTP
+server and potentially some environment-specific configuration.
+
+
+```sh
+./internal/web # root http handler
+./cmd/server # production server
+./cmd/dev-server # development server
+```
+
+Production specific code in `./cmd/server` could include configuring logs to be
+routed to an APM, and ellaborate server configuration settings. But the http
+handler itself is from `./internal/web/`. 
+
+Now `./cmd/dev-server` is another thin package, wrapping the handler in a live
+reload middleware, and just calling `http.ListenAndServe`.
+
+[Server Project]: https://go.dev/doc/modules/layout#server-project
+
+### Alternate solution to avoid dev-server
+
+I would assume you could use build tags to achieve the same goal, dev-code is
+only used with a dev-code 
+
+  - I find that using build-tags borders on what can be considered idiomatic.
+    Good uses are when different platforms require different implementations. 
+  - AFAIK, build tags affect entire files; Individual code lines adding
+    middlewares cannot be conditionally compiled.
+    - This means you need to alternate files with the same function.
+  - It's less likely to accidentally start the wrong command, than to
+    accidentally use the wrong build tags.
+
 ## Example
 
-The 
+An example dev-server for the module `exampleapp` could look like this:
 
 ```go
+// ./cmd/dev-server
+package main
+
+import (
+    "net/http"
+    "exampleapp/internal/web"
+    "github.com/gost-dom/livereload"
+)
+
 func main() {
 	var rootHandler http.Handler := web.createRootHttpHandler()
 	var reloader livereload.Middleware
+    // I've only tested on MacOS, but relative paths appear to be resolved from
+    // the current working dir.
 	err1 := reloader.WatchDir("static/css")
 	err2 := reloader.WatchDir("static/js")
 	if err := errors.Join(err1, err2); err != nil {
@@ -53,29 +121,29 @@ func main() {
 }
 ```
 
-## But I don't want this in production code!?!
+### Off-topic: other uses for a dedicated dev-server command
 
-You don't have to. Make `package main` a thin package, decoupled from all
-application logic. Only production specific code is in this package.
+The livereload is not the only reason for a dedicated dev-server; I may also
+have test-specific endpoints here.
 
-An example following the [Server Project]:
+Refactoring CSS files can have unintended effects. To prevent this, I often have
+regression tests rendering pages in a browser, taking screenshots, and comparing
+them against a golden sample.
 
-```sh
-./internal/web # root http handler
-./cmd/server # production server
-./cmd/dev-server # development server
-```
+If there are changes in the rendered screenshot, the test breaks. If the changes
+are intended, the actual screenshots gets elevated to a new golden sample.
 
-Package `./cmd/server` may configure logging with APM systems, and ellaborate
-server configuration settings, but the http handler itself is from
-`./internal/web/`. 
+To have identical output for each run, special endpoints render templates with
+static data. And to simplify the test, those endpoints doesn't require
+authentication, even when the content is only meant for authenticated users.
 
-Now `./cmd/dev-server` is another thin package, wrapping the handler in a live
-reload middleware, and just calling `http.ListenAndServe`.
-
-[Server Project]: https://go.dev/doc/modules/layout#server-project
+Neither the endpoints, nor test data, should exist in the production build. They
+go into the dev-server.
 
 ## Restarting server automatically with nodemon
+
+I'm not aware of a native Go-solution that can restart the server when source
+code changes.
 
 `nodemon` is a common tool for this problem in the node.js community. You can
 install it with your favourite JS package manager, e.g., `npm i -g nodemon`
@@ -93,6 +161,10 @@ Explanation of the arguments
 - `--` Everything after is passed to the `go` executable, effectively becoming, `go run ./cmd/dev-server`
 
 You can of course place this in a Taskfile or similar.
+
+> [!WARNING]
+> This only watches .go files, so content embedded with the `embed` package will
+> not be taken into account. Adjust accordingly.
 
 ## Pro tip for templ and neovim: Program your editor to build templates
 
