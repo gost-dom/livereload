@@ -63,7 +63,7 @@ An example dev-server for the module `exampleapp` could look like this:
 package main
 
 import (
-    "net/http"
+    // .. necessary std imports
     "exampleapp/internal/web"
     "github.com/gost-dom/livereload"
 )
@@ -73,10 +73,10 @@ func main() {
 	err1 := reloader.WatchDir("static/css")
 	err2 := reloader.WatchDir("static/js")
 	if err := errors.Join(err1, err2); err != nil {
-		slog.Errorf("Livereload initialization failed", "error", err)
+		slog.Error("Livereload initialization failed", "error", err)
 	}
-	rootHandler := web.createRootHttpHandler()
-	http.ListenAndServer(":8080", reloader.Middleware(rootHandler))
+	rootHandler := web.CreateRootHttpHandler()
+	http.ListenAndServe(":8080", reloader.Middleware(rootHandler))
 }
 ```
 
