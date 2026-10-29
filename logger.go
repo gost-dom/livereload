@@ -18,7 +18,7 @@ func (l *logger) LogError(msg string, e error) {
 		}
 	} else {
 		if e == nil {
-			fmt.Fprintf(os.Stderr, msg)
+			fmt.Fprint(os.Stderr, msg)
 		} else {
 			fmt.Fprintf(os.Stderr, "%s: %v", msg, e)
 		}
