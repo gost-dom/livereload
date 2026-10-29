@@ -136,7 +136,6 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 	c := m.createWatcher()
 	defer m.removeChannel(c)
 
-	fmt.Println("Start socket")
 	ctrl := http.NewResponseController(w)
 	_, rw, err := ctrl.Hijack()
 	if err != nil {
@@ -153,7 +152,6 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 			writeWsMessage(rw, "RELOAD")
 			return
 		case <-ctx.Done():
-			fmt.Println("Context done")
 			return
 		}
 	}
