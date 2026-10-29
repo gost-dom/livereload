@@ -43,13 +43,13 @@ The
 ```go
 func main() {
 	var rootHandler http.Handler := web.createRootHttpHandler()
-	reloader := livereload.NewMiddleware(rootHandler)
+	var reloader livereload.Middleware
 	err1 := reloader.WatchDir("static/css")
 	err2 := reloader.WatchDir("static/js")
 	if err := errors.Join(err1, err2); err != nil {
 		slog.Errorf("Livereload initialization failed", "error", err)
 	}
-	http.ListenAndServer(":8080", reloader)
+	http.ListenAndServer(":8080", reloader.Middleware(rootHandler))
 }
 ```
 
