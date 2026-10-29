@@ -85,19 +85,12 @@ func splitAtPotentiallyPartialTag(b []byte) (newB []byte, carry []byte) {
 	tagStartIndex := bytes.LastIndexByte(b, replacementPointFirstChar)
 	tagEndIndex := bytes.LastIndexByte(b, replacementPointLastChar)
 	lastEndTagCouldBeBody := tagStartIndex >= len(b)-bodyLen
-	lastEndTagCompleted := tagStartIndex < tagEndIndex
+	lastEndTagCompleted := tagStartIndex > tagEndIndex
 	if lastEndTagCouldBeBody && lastEndTagCompleted {
 		return b[:tagStartIndex], b[tagStartIndex:]
 	} else {
 		return b, nil
 	}
-}
-
-func potentiallyContainsUnfinishedEndTag(b []byte) bool {
-	const bodyLen = len("</body>")
-	endTagStartIndex := bytes.LastIndex(b, []byte("</"))
-	tagEndIndex := bytes.LastIndexByte(b, '>')
-	return endTagStartIndex >= len(b)-bodyLen && endTagStartIndex > tagEndIndex
 }
 
 func createScript(socketPath string) string {
