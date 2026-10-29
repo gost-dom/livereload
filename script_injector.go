@@ -29,7 +29,7 @@ const replacementPoint = "</body>"
 var replacementPointFirstChar = replacementPoint[0]
 var replacementPointLastChar = replacementPoint[len(replacementPoint)-1]
 
-var bodyEndTag = regexp.MustCompile(regexp.QuoteMeta(replacementPoint))
+var bodyEndTag = regexp.MustCompile("(?i)" + regexp.QuoteMeta(replacementPoint))
 
 // Write implements http.ResponseWriter. It delegates most calls unmodified to
 // the wrapped ResponseWriter. Only when the Content-Type header is text/html

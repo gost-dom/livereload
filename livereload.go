@@ -31,7 +31,7 @@ const defaultPath = "/_reload"
 // capabilities.
 //
 //	func main() {
-//		var rootHandler http.Handler := createRootHttpHandler()
+//		rootHandler http.Handler := createRootHttpHandler()
 //		var reloader livereload.Livereload
 //		err1 := reloader.WatchDir("static/css")
 //		err2 := reloader.WatchDir("static/js")
