@@ -13,8 +13,8 @@ better solutions in their ecosystems with hot-module reloading.
 ## How does this differentiate from other solutions.
 
 Other solutions I've tried includes Templ's own livereload capabilities, as well
-as Air. They both require an extra "proxy server", a dedicated process, often
-running in the background. And air is simply too complicated to configure. This
+as Air. They both require an extra "proxy server", a dedicated process. They weren't stable
+. And air is simply too complicated to configure. This
 is a simple problem, the default configuration shouldn't be complex.
 
 ## How this works
@@ -35,6 +35,23 @@ websocket, bringing the script into a _reconnect_ phase, and once a connection
 can be established again, it reloads. The _reconnect_ phase prevents reloading
 too soon, before the web server is ready to accept incoming connections,
 resulting in a "connection failed" state in the browser.
+
+## Example
+
+The 
+
+```go
+func main() {
+	var rootHandler http.Handler := web.createRootHttpHandler()
+	reloader := livereload.NewMiddleware(rootHandler)
+	err1 := reloader.WatchDir("static/css")
+	err2 := reloader.WatchDir("static/js")
+	if err := errors.Join(err1, err2); err != nil {
+		slog.Errorf("Livereload initialization failed", "error", err)
+	}
+	http.ListenAndServer(":8080", reloader)
+}
+```
 
 ## But I don't want this in production code!?!
 
