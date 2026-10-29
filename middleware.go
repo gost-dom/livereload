@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path"
 	"slices"
@@ -116,7 +118,7 @@ func (m *middleware) waitForCloseFrame(ctx context.Context, rw *bufio.ReadWriter
 		for {
 			i, err := rw.Read(b)
 			if err != nil || i == 0 {
-				if err != io.EOF {
+				if err != io.EOF && !errors.Is(err, net.ErrClosed) {
 					m.logger().LogError("livereload: error reading from websocket", err)
 				}
 				cancel()
@@ -124,6 +126,7 @@ func (m *middleware) waitForCloseFrame(ctx context.Context, rw *bufio.ReadWriter
 			}
 			// This is really, really stupid, but it's good enough for the problem.
 			if b[0] == 0b_1000_1000 { // Close frame
+				rw.Write([]byte{0x88, 0x00})
 				cancel()
 				return
 			}
@@ -137,7 +140,12 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 	defer m.removeChannel(c)
 
 	ctrl := http.NewResponseController(w)
-	_, rw, err := ctrl.Hijack()
+	conn, rw, err := ctrl.Hijack()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			m.logger().LogError("livereload: error cleaning up websocket", err)
+		}
+	}()
 	if err != nil {
 		m.logger().LogError("livereload: error hijacking response", err)
 		return
