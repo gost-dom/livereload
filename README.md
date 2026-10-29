@@ -18,21 +18,20 @@ problem (e.g., this cannot handle messages larger than a single frame can hold)
 
 The only dependency is [fsnotify] used for monitoring file system events.
 
-I may refactor this in a way that the watcher gets moved to its own package, and
-the watcher to use is plugged into the main `Livereload` type. This would allow
-the core middleware to be a zero-dependency module, and client code can bring
-their own trigger logic.
+I may refactor this in a way that fsnitify-dependent code is moved to its own module, 
+and you need to inject a watcher. Thus leaving the main livereload module free
+of dependencies. But I don't have plans for this yet.
 
 [fsnotify]: github.com/fsnotify/fsnotify
 
 ## How does this differentiate from other solutions.
 
-The one tool ubiquitously mentioned to solve this problem in Go is [Air]. I find
-this to be an overly complex solution, it's difficult and unintuitive to
-configure, e.g., often the server was recompiled when unnecessary; often it
-wasn't recompiled when it was necessary.
+The one tool ubiquitously mentioned to solve this problem in Go is [Air]. But I
+find Air to be unintuitive, overly complex to configure, builds unnecessary
+artefacts (when you can launch with `go run`), and starts an unnecessary proxy
+server, adding one extra potential port conflict.
 
-IMHO, this build on much simpler 
+IMHO, this build on much simpler principles.
 
 [Air]: https://github.com/air-verse/air
 
@@ -41,57 +40,19 @@ IMHO, this build on much simpler
 The library has an HTTP middleware, you use to wrap your existing http Handler.
 
 The middleware automatically injects a `<script src="..."></script>` element
-into HTML responses (only affects responses with a `Content-Type: text/html`
-header. The middleware also serves the necessary script, and accepts websocket
-connections initiated by the script.
+into responses with a `Content-Type: text/html` header. The middleware also
+serves the necessary script, and accepts websocket connections initiated by the
+script.
 
-The application must call `WatchDir` for each directory with content to watch.
-The watcher will push a `reload` message to the client, when changes are
-detected, triggering a browser reload.
+The application must call `WatchDir` for each directory with content to watch;
+they are not watched recursively. The watcher will push a `reload` message to
+the client when changes are detected; and the script will reload the current URL.
 
-The script will also reload after the server restarts. It reacts to a broken
-websocket, bringing the script into a _reconnect_ phase, and once a connection
-can be established again, it reloads. The _reconnect_ phase prevents reloading
-too soon, before the web server is ready to accept incoming connections,
-resulting in a "connection failed" state in the browser.
-
-## Avoiding dev-code in production builds.
-
-If your project follows the [Server Project] module layout, you could
-potentially create multiple `package main`, one for production, one for dev.
-
-If you decouple _application logic_ (including HTTP handlers) from _startup
-code_, then `package main` can be a very thin package only for launcing the HTTP
-server and potentially some environment-specific configuration.
-
-
-```sh
-./internal/web # root http handler
-./cmd/server # production server
-./cmd/dev-server # development server
-```
-
-Production specific code in `./cmd/server` could include configuring logs to be
-routed to an APM, and ellaborate server configuration settings. But the http
-handler itself is from `./internal/web/`. 
-
-Now `./cmd/dev-server` is another thin package, wrapping the handler in a live
-reload middleware, and just calling `http.ListenAndServe`.
-
-[Server Project]: https://go.dev/doc/modules/layout#server-project
-
-### Alternate solution to avoid dev-server
-
-I would assume you could use build tags to achieve the same goal, dev-code is
-only used with a dev-code 
-
-  - I find that using build-tags borders on what can be considered idiomatic.
-    Good uses are when different platforms require different implementations. 
-  - AFAIK, build tags affect entire files; Individual code lines adding
-    middlewares cannot be conditionally compiled.
-    - This means you need to alternate files with the same function.
-  - It's less likely to accidentally start the wrong command, than to
-    accidentally use the wrong build tags.
+The script also handles server restarts. When the websocket is broken, the
+script goes into a _reconnect_ phase. Once a connection is established again, it
+reloads. The _reconnect_ phase prevents reloading before the web server is ready
+to accept incoming connections, resulting in a "connection failed" state in the
+browser (requiring manual reload)
 
 ## Example
 
@@ -110,8 +71,6 @@ import (
 func main() {
 	var rootHandler http.Handler := web.createRootHttpHandler()
 	var reloader livereload.Middleware
-    // I've only tested on MacOS, but relative paths appear to be resolved from
-    // the current working dir.
 	err1 := reloader.WatchDir("static/css")
 	err2 := reloader.WatchDir("static/js")
 	if err := errors.Join(err1, err2); err != nil {
@@ -121,29 +80,60 @@ func main() {
 }
 ```
 
+If directories aren't absolute, they are resolved from the current working
+directory (I've only tested on MacOS).
+
+## Avoiding dev-code in production builds.
+
+The previous example adds live reload behaviour into server executable. To avoid
+test code in production builds, 
+
+  - Use build tags to conditionally 
+  - Create separate `./cmd/server` and `./cmd/dev-server` packages, each being a
+    `main` package, launching an HTTP server.
+
+The may not be a good fit, but works well for projects that follow the the
+[Server Project] module layout.
+
+By decoupling _application logic_ (including HTTP handlers) from _startup code_,
+`package main` can be a very thin package with minimal responsibilities, e.g.
+starting the HTTP listener and handling environment-specific configuration.
+
+
+```sh
+./internal/web # root http handler
+./cmd/server # production server
+./cmd/dev-server # development server
+```
+
+Production specific code in `./cmd/server` could include configuring logs to be
+routed to an APM, and ellaborate server configuration settings. But the http
+handler itself is from `./internal/web/`. 
+
+Now `./cmd/dev-server` is another thin package, wrapping the handler in a live
+reload middleware, and just calling `http.ListenAndServe`.
+
+[Server Project]: https://go.dev/doc/modules/layout#server-project
+
 ### Off-topic: other uses for a dedicated dev-server command
 
-The livereload is not the only reason for a dedicated dev-server; I may also
-have test-specific endpoints here.
+The livereload is not the only reason for a dedicated dev-server; I often have
+test-specific endpoints for regression testinging templates.
 
 Refactoring CSS files can have unintended effects. To prevent this, I often have
 regression tests rendering pages in a browser, taking screenshots, and comparing
 them against a golden sample.
 
 If there are changes in the rendered screenshot, the test breaks. If the changes
-are intended, the actual screenshots gets elevated to a new golden sample.
+are intended, the current screenshots are elevated to a new golden sample.
 
 To have identical output for each run, special endpoints render templates with
-static data. And to simplify the test, those endpoints doesn't require
-authentication, even when the content is only meant for authenticated users.
+static viewmodels. They also render for unauthenticated users, no matter the
+intended use for the templates.
 
-Neither the endpoints, nor test data, should exist in the production build. They
-go into the dev-server.
+Those endpoints, as well as the static viewmodels, only exist in the dev-server.
 
 ## Restarting server automatically with nodemon
-
-I'm not aware of a native Go-solution that can restart the server when source
-code changes.
 
 `nodemon` is a common tool for this problem in the node.js community. You can
 install it with your favourite JS package manager, e.g., `npm i -g nodemon`
@@ -152,38 +142,41 @@ install it with your favourite JS package manager, e.g., `npm i -g nodemon`
 nodemon -e "go" -i "*_test.go" -x go --signal SIGTERM -- run ./cmd/dev-server
 ```
 
-Explanation of the arguments
+> [!TIP]
+> You can of course place this in a Taskfile or similar.
 
-- `-e go` File extensions to watch
-- `-i *_test.go` Don't restart when tests change
-- `-x go` The name of the executable to run
-- `--signal SIGTERM` I found this was the most reliable way to terminate `http.ListenAndServe`
-- `--` Everything after is passed to the `go` executable, effectively becoming, `go run ./cmd/dev-server`
-
-You can of course place this in a Taskfile or similar.
+> [!NOTE]
+> This basically tells nodemon to run `go run ./cmd/dev-server`, and restart it
+> whenever a `.go` file changes, but not when a test file changes. To shutdown
+> the running server, it should send a `SIGTERM` signal. That signal is used
+> here, as `http.ListenAndServe` terminates on that signal. If you have custom
+> signal handling, you may want to adapt.
 
 > [!WARNING]
 > This only watches .go files, so content embedded with the `embed` package will
 > not be taken into account. Adjust accordingly.
 
-## Pro tip for templ and neovim: Program your editor to build templates
+## Pro tip for templ and neovim: Program your editor to build .templ files
 
 Building on top of the previous, automatically reloading when a .go file
 changes, if you use templ, integrating live reload requires the following steps.
 
   1. Save a .templ file
-  2. Run `templ generate {}.templ` producing 
-  3. Nodemon (or your weapon of choice) reruns `go run ...`
+  2. Run `templ generate -f {filename}.templ` to produce to `.go` file.
+  3. Nodemon (or your tool of choice) reruns `go run ...`
 
-Templ itself provides a watcher for building templ files into .go files, but
-that's another process that needs to run, take up terminal space.
+Templ itself provides a watcher for building templ files into .go files, but I
+prefer to just let my editor run templ automatically.
 
-Another approach is to program your editor to just compile the templ file after
-save. A benefit of this is that any compilation errors are easy to get in the
-editor.
+Pros of this approach is
 
-In neovim, you could do it with this script (adapt if you don't use `go tool`
-for templ):
+  - It's not another process running in another shell
+  - I rarely notice templ build errors, as the shell isn't normally visible on screen.
+  - When the editor runs `templ generate`, it can detect non-zero exit codes,
+    and present error messages to the user.
+
+The following neovim script will implement that behaviour (adapt if you don't
+use `go tool` for templ):
 
 ```lua
 vim.api.nvim_create_autocmd("BufWritePost", {
