@@ -164,16 +164,18 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 		case <-ctx.Done():
 			cause := context.Cause(ctx)
 			if errors.Is(cause, errClientSendCloseFrame) {
-				// Confirm with close framw
+				// Confirm with close frame
 				_, err = rw.Write([]byte{0x88, 0x00})
 				if err == nil {
 					err = rw.Flush()
+				}
+				if err != nil {
+					m.logger().LogError("livereload: error confirming close frame", err)
 				}
 			}
 			return
 		}
 	}
-
 }
 
 func writeWsMessage(w *bufio.ReadWriter, message string) error {
