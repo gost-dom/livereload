@@ -14,10 +14,11 @@ import (
 // HTML responses.
 type scriptInjector struct {
 	http.ResponseWriter
+	logger           *logger
 	scriptPath       string
 	firstByteWritten bool
 	injected         bool
-	isHtml           bool
+	injectScript     bool
 	carry            []byte
 }
 
@@ -45,11 +46,10 @@ var bodyEndTag = regexp.MustCompile(regexp.QuoteMeta(replacementPoint))
 // next call to Write.
 func (w *scriptInjector) Write(b []byte) (int, error) {
 	if !w.firstByteWritten {
-		ct := w.ResponseWriter.Header().Get("Content-Type")
-		w.isHtml = strings.HasPrefix(ct, "text/html")
+		w.injectScript = w.canInjectScript()
 		w.firstByteWritten = true
 	}
-	if !w.isHtml || w.injected {
+	if !w.injectScript || w.injected {
 		return w.ResponseWriter.Write(b)
 	}
 	l := len(b)
@@ -67,6 +67,22 @@ func (w *scriptInjector) Write(b []byte) (int, error) {
 	b, w.carry = splitAtPotentiallyPartialTag(b)
 	_, err := w.ResponseWriter.Write(b)
 	return l, err
+}
+
+func (w *scriptInjector) canInjectScript() bool {
+	ct := w.ResponseWriter.Header().Get("Content-Type")
+	ce := w.ResponseWriter.Header().Get("Content-Encoding")
+	if ct != "" && !strings.HasPrefix(ct, "text/html") {
+		return false
+	}
+	if ce != "" {
+		w.logger.LogError(
+			"livereload: cannot inject live reload script into gzipped response",
+			nil,
+		)
+		return false
+	}
+	return true
 }
 
 func (w *scriptInjector) addCarry(b []byte) []byte {

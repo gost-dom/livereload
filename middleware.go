@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
 	"slices"
 	"sync"
@@ -30,9 +29,14 @@ func (m *middleware) start() error {
 		for e := range m.config.watcher.Events {
 			if e.Has(fsnotify.Create) || e.Has(fsnotify.Write) || e.Has(fsnotify.Rename) {
 				for _, c := range m.getWatchers() {
-					c <- fsEvent{}
+					go func() { c <- fsEvent{} }()
 				}
 			}
+		}
+	}()
+	go func() {
+		for e := range m.config.watcher.Errors {
+			m.logger().LogError("livereload: error reported by fsnotify", e)
 		}
 	}()
 	return nil
@@ -74,8 +78,12 @@ func (m *middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.webSocket(ctx, w, r)
 		return
 	}
-	w = &scriptInjector{ResponseWriter: w, scriptPath: scriptPath}
+	w = &scriptInjector{ResponseWriter: w, scriptPath: scriptPath, logger: m.logger()}
 	m.Handler.ServeHTTP(w, r)
+}
+
+func (m *middleware) logger() *logger {
+	return (*logger)(m.config.Logger)
 }
 
 func (m *middleware) removeChannel(c chan fsEvent) {
@@ -106,11 +114,7 @@ func (m *middleware) waitForCloseFrame(ctx context.Context, rw *bufio.ReadWriter
 			i, err := rw.Read(b)
 			if err != nil || i == 0 {
 				if err != io.EOF {
-					if l := m.config.Logger; l != nil {
-						l.Error("livereload: error reading from websocket", "err", err)
-					} else {
-						fmt.Fprintf(os.Stderr, "livereload: error reading from websocket: %v", err)
-					}
+					m.logger().LogError("livereload: error reading from websocket", err)
 				}
 				cancel()
 				return

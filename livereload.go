@@ -21,8 +21,8 @@ const defaultPath = "/_reload"
 // When configured, call [*Livereload.Middleware] attach to an http.Handler
 //
 // Create a [Livereload] that can intercept HTTP requests. Add directories to
-// watch using [*Livereload.WatchDir], and start watching for changes with
-// [*Livereload.Start]
+// watch using [*Livereload.WatchDir]. Call [*Livereload.Middleware] to create
+// the middleware based on the configuration.
 //
 // # Example usage
 //
@@ -32,16 +32,16 @@ const defaultPath = "/_reload"
 //
 //	func main() {
 //		var rootHandler http.Handler := createRootHttpHandler()
-//		reloader := livereload.Livereload{}
+//		var reloader livereload.Livereload
 //		err1 := reloader.WatchDir("static/css")
 //		err2 := reloader.WatchDir("static/js")
 //		if err := errors.Join(err1, err2); err != nil {
 //			// Up to you, if failing to watch dirs should fail early, or merely
 //			// log. The server should still work normally after all, just the
 //			// reload that will not work.
-//			slog.Errorf("Livereload initialization failed", "error", err)
+//			slog.Error("Livereload initialization failed", "err", err)
 //		}
-//		http.ListenAndServer(":8080", reloader.Middleware(reloader))
+//		http.ListenAndServe(":8080", reloader.Middleware(rootHandler))
 //	}
 //
 // # Do not combine with StripPrefix

@@ -15,8 +15,8 @@
 //
 // # How it works
 //
-// The package has a single type, [Middleware] wrapping your normal root HTTP handler.
-// The middleware does the following
+// The package has a single exported type, [Livereload] for configuring and
+// creating a middleware. The middleware does the following
 //
 //   - Injects a <script src="..."></script> into responses with Content-Type: text/html.
 //   - Serves the required script
