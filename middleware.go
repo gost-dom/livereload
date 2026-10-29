@@ -139,7 +139,7 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 	ctrl := http.NewResponseController(w)
 	_, rw, err := ctrl.Hijack()
 	if err != nil {
-		fmt.Println("Error hijacking response", err)
+		m.logger().LogError("livereload: error hijacking response", err)
 		return
 	}
 
