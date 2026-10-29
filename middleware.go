@@ -29,7 +29,10 @@ func (m *middleware) start() error {
 		for e := range m.config.watcher.Events {
 			if e.Has(fsnotify.Create) || e.Has(fsnotify.Write) || e.Has(fsnotify.Rename) {
 				for _, c := range m.getWatchers() {
-					c <- fsEvent{}
+					select {
+					case c <- fsEvent{}:
+					default: // If the channel is flooded, a reload is already scheduled
+					}
 				}
 			}
 		}
@@ -46,10 +49,7 @@ func (m *middleware) createWatcher() chan fsEvent {
 	// Create a buffered channel, as we don't want to block on sending.
 	// Otherwise, this could potentially hang if a client disconnects while
 	// notifying subscribers.
-	//
-	// Editor save often results in multiple events, CREATE/WRITE/RENAME,
-	// so the buffer should at least be able to accomodate 3 events.
-	c := make(chan fsEvent, 16)
+	c := make(chan fsEvent, 1)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.watchers = append(m.watchers, c)

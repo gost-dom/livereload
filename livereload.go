@@ -31,7 +31,6 @@ const defaultPath = "/_reload"
 // capabilities.
 //
 //	func main() {
-//		rootHandler http.Handler := createRootHttpHandler()
 //		var reloader livereload.Livereload
 //		err1 := reloader.WatchDir("static/css")
 //		err2 := reloader.WatchDir("static/js")
@@ -41,6 +40,7 @@ const defaultPath = "/_reload"
 //			// reload that will not work.
 //			slog.Error("Livereload initialization failed", "err", err)
 //		}
+//		rootHandler := createRootHttpHandler()
 //		http.ListenAndServe(":8080", reloader.Middleware(rootHandler))
 //	}
 //
