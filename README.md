@@ -18,11 +18,11 @@ problem (e.g., this cannot handle messages larger than a single frame can hold)
 
 The only dependency is [fsnotify] used for monitoring file system events.
 
-I may refactor this in a way that fsnitify-dependent code is moved to its own module, 
+I may refactor this in a way that fsnotify-dependent code is moved to its own module, 
 and you need to inject a watcher. Thus leaving the main livereload module free
 of dependencies. But I don't have plans for this yet.
 
-[fsnotify]: github.com/fsnotify/fsnotify
+[fsnotify]: https://github.com/fsnotify/fsnotify
 
 ## How does this differentiate from other solutions.
 
@@ -85,15 +85,15 @@ directory (I've only tested on MacOS).
 
 ## Avoiding dev-code in production builds.
 
-The previous example adds live reload behaviour into server executable. To avoid
-test code in production builds, 
+The previous example adds live reload behaviour into server executable. There
+are at least two strategies to avoid this:
 
-  - Use build tags to conditionally 
+  - Use build tags, so livereload functionality is only added if a dev-tag is used.
   - Create separate `./cmd/server` and `./cmd/dev-server` packages, each being a
     `main` package, launching an HTTP server.
 
-The may not be a good fit, but works well for projects that follow the the
-[Server Project] module layout.
+Whether the latter may not be a good fit for all projects, but works well for
+projects that follow the the [Server Project] module layout.
 
 By decoupling _application logic_ (including HTTP handlers) from _startup code_,
 `package main` can be a very thin package with minimal responsibilities, e.g.
