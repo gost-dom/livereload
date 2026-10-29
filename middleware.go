@@ -111,8 +111,10 @@ func (m *middleware) sendWsHandshake(rw *bufio.ReadWriter, r *http.Request) {
 	rw.Flush()
 }
 
+var errClientSendCloseFrame = errors.New("closed by client")
+
 func (m *middleware) waitForCloseFrame(ctx context.Context, rw *bufio.ReadWriter) context.Context {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
 	go func() {
 		b := make([]byte, 1000)
 		for {
@@ -121,13 +123,12 @@ func (m *middleware) waitForCloseFrame(ctx context.Context, rw *bufio.ReadWriter
 				if err != io.EOF && !errors.Is(err, net.ErrClosed) {
 					m.logger().LogError("livereload: error reading from websocket", err)
 				}
-				cancel()
+				cancel(err)
 				return
 			}
 			// This is really, really stupid, but it's good enough for the problem.
 			if b[0] == 0b_1000_1000 { // Close frame
-				rw.Write([]byte{0x88, 0x00})
-				cancel()
+				cancel(errClientSendCloseFrame)
 				return
 			}
 		}
@@ -152,6 +153,7 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	m.sendWsHandshake(rw, r)
+	// Create a nested context that is cancelled if the client aborts
 	ctx = m.waitForCloseFrame(ctx, rw)
 
 	for {
@@ -160,9 +162,18 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 			writeWsMessage(rw, "RELOAD")
 			return
 		case <-ctx.Done():
+			cause := context.Cause(ctx)
+			if errors.Is(cause, errClientSendCloseFrame) {
+				// Confirm with close framw
+				_, err = rw.Write([]byte{0x88, 0x00})
+				if err == nil {
+					err = rw.Flush()
+				}
+			}
 			return
 		}
 	}
+
 }
 
 func writeWsMessage(w *bufio.ReadWriter, message string) error {
@@ -184,7 +195,7 @@ func writeWsMessage(w *bufio.ReadWriter, message string) error {
 	// Because l is already checked to be < 125, bit 8 is not set.
 	_, err := w.Write(append([]byte{0b_1000_0001, byte(l)}, b...))
 	if err == nil {
-		w.Flush()
+		err = w.Flush()
 	}
 	return err
 }
