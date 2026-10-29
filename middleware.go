@@ -143,6 +143,13 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 	ctrl := http.NewResponseController(w)
 	conn, rw, err := ctrl.Hijack()
 	defer func() {
+		// TODO: Consider sending a proper close frame
+		// In case the passed context is cancelled, we close the connection
+		// without sending a close frame to the client.
+		//
+		// Maybe we _should_ keep track of whether the function exits because
+		// the connection was closed by the remote client, or because of a
+		// context cancellation.
 		if err := conn.Close(); err != nil {
 			m.logger().LogError("livereload: error cleaning up websocket", err)
 		}
@@ -160,7 +167,14 @@ func (m *middleware) webSocket(ctx context.Context, w http.ResponseWriter, r *ht
 		select {
 		case <-c:
 			writeWsMessage(rw, "RELOAD")
-			return
+			// This used to return, closing the websocket forcibly. Hoever, if
+			// the client behaves normally, it would close the connection on reload.
+			//
+			// If for some reason, the client doesnt reload, which is better?
+			//
+			//   - Send a new message on next trigger (current implementation)
+			//   - Forcibly close the connection, assuming the client disconnect
+			//     logic will eventually reload? (previous version)
 		case <-ctx.Done():
 			cause := context.Cause(ctx)
 			if errors.Is(cause, errClientSendCloseFrame) {
