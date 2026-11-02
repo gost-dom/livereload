@@ -83,13 +83,6 @@ func main() {
 If directories aren't absolute, they are resolved from the current working
 directory (I've only tested on MacOS).
 
-## Caveats
-
-If current page cannot be served, the default 404 NotFound page served by Go's
-http package is a plain text file. In that case, e.g., a code change removes the
-current endpoint, the browser looses its livereload behaviour. You need to
-manually reload to reattach.
-
 ## Avoiding dev-code in production builds.
 
 The previous example adds live reload behaviour into server executable. There

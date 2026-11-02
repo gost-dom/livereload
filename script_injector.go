@@ -128,9 +128,14 @@ func createScript(socketPath string) string {
 		console.log("livereload: connection closed", e)
 		const retry = (timeout) => {
 			console.log("livereload: checking for live server after", timeout)
-			fetch("/").then(() => {
-				console.log("livereload: server back online: reload")
-				window.location.reload()
+			fetch(document.location.pathname).then(r => {
+				if (r.ok) {
+					console.log("livereload: server back online: reload")
+					window.location.reload()
+				} else {
+					const newTimeout = timeout + initialTimeout
+					setTimeout( () => { retry(newTimeout) }, newTimeout)
+				}
 			}, () => {
 				const newTimeout = timeout + initialTimeout
 				setTimeout( () => { retry(newTimeout) }, newTimeout)
