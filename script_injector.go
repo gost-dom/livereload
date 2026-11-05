@@ -125,6 +125,7 @@ func createScript(socketPath string) string {
 		}
 	})
 	ws.addEventListener('close', e => { 
+		if (e.wasClean) { return }
 		console.log("livereload: connection closed", e)
 		const retry = (timeout) => {
 			console.log("livereload: checking for live server after", timeout)
