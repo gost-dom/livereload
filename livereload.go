@@ -60,8 +60,13 @@ type Livereload struct {
 	// In case of abnormal websocket errors, they will be reported to Logger if set; otherwise they are written to os.Stderr.
 	//
 	// This behaviour could change based on user feedback
-	Logger  *slog.Logger
-	watcher *fsnotify.Watcher
+	Logger *slog.Logger
+	// By default, the middleware sets Cache-Control: no-cache response header. This behaviour can be disabled here.
+	// NOTE: This behaviour is not guaranteed to remain. It seems like a
+	// sensible default right now, but the downside is, it's more difficult to
+	// explicitly test proper Cache-Control headers in the app.
+	DisableCacheControl bool
+	watcher             *fsnotify.Watcher
 }
 
 var rootDir string

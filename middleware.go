@@ -83,6 +83,7 @@ func (m *middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.webSocket(ctx, w, r)
 		return
 	}
+	w.Header().Add("Cache-Control", "no-cache")
 	w = &scriptInjector{ResponseWriter: w, scriptPath: scriptPath, logger: m.logger()}
 	m.Handler.ServeHTTP(w, r)
 }
